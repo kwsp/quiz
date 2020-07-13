@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 type problem struct {
@@ -25,7 +26,6 @@ func parseLines(lines [][]string) []problem {
 }
 
 func readProblemsCSV(file string) ([]problem, error) {
-	fmt.Println("Reading file: ", file)
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
@@ -42,22 +42,37 @@ func readProblemsCSV(file string) ([]problem, error) {
 	return res, err
 }
 
-func run(file string) {
+func run(file string, timeLimit int) {
 	problems, err := readProblemsCSV(file)
-
 	if err != nil {
 		fmt.Println("Failed to read CSV: ", err)
 		os.Exit(1)
 	}
 
 	nCorrect := 0
-	var ans string
+	timer := time.NewTimer(time.Duration(timeLimit) * time.Second)
+	// Block until the goroutine gets a message from the channel (timer done)
+	// Exit the program when timer runs out.
+
+	ansCh := make(chan string)
+problemLoop:
 	for i, problem := range problems {
 		fmt.Printf("Problem #%d: %s = ", i+1, problem.q)
 
-		fmt.Scanf("%s\n", &ans)
-		if ans == problem.a {
-			nCorrect++
+		go func() {
+			var ans string
+			fmt.Scanf("%s\n", &ans)
+			ansCh <- ans
+		}()
+
+		select {
+		case <-timer.C:
+			fmt.Println()
+			break problemLoop
+		case ans := <-ansCh:
+			if ans == problem.a {
+				nCorrect++
+			}
 		}
 	}
 	fmt.Printf("You scored %d out of %d.\n", nCorrect, len(problems))
@@ -65,5 +80,7 @@ func run(file string) {
 
 func main() {
 	csvFilename := flag.String("csv", "problems.csv", "a csv file in the format of 'question,answer'")
-	run(*csvFilename)
+	timeLimit := flag.Int("limit", 30, "the time limit for the quiz in seconds.")
+	flag.Parse()
+	run(*csvFilename, *timeLimit)
 }
